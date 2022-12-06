@@ -19,6 +19,8 @@
 # add PYTHONPATH
 import os
 import sys
+import numpy as np
+import math
 sys.path.append(os.path.join(os.path.abspath(os.path.dirname(__file__)), '..', 'joint_control'))
 
 from numpy.matlib import matrix, identity
@@ -36,9 +38,18 @@ class ForwardKinematicsAgent(PostureRecognitionAgent):
         self.transforms = {n: identity(4) for n in self.joint_names}
 
         # chains defines the name of chain and joints of the chain
-        self.chains = {'Head': ['HeadYaw', 'HeadPitch']
-                       # YOUR CODE HERE
+        self.chains = {'Head': ['HeadYaw', 'HeadPitch'],
+                       'LArm': ['LShoulderPitch', 'LShoulderRoll', 'LElbowYaw', 'LElbowRoll'],
+                       'LLeg': ['LHipYawPitch', 'LHipRoll', 'LHipPitch', 'LKneePitch', 'LAnklePitch', 'LAnkleRoll'],
+                       'RLeg': ['RHipYawPitch', 'RHipRoll', 'RHipPitch', 'RKneePitch', 'RAnklePitch', 'RAnkleRoll'],
+                       'RArm': ['RShoulderPitch', 'RShoulderRoll', 'RElbowYaw', 'RElbowRoll']
                        }
+        self.joint_offsets = {
+            'RLeg': [[0, -50, -85], [0, 0, 0], [0, 0, 0], [0, 0, -100], [0, 0, -102.9], [0, 0, 0]],
+            'RArm': [[0, -98, 100], [0, 0, 0], [105, 15, 0], [0, 0, 0]],
+            'LArm': [[0, 98, 100], [0, 0, 0], [105, 15, 0], [0, 0, 0]],
+            'LLeg': [[0, 50, -85], [0, 0, 0], [0, 0, 0], [0, 0, -100], [0, 0, -102.9], [0, 0, 0]],
+            'Head': [[0, 0, 126.5], [0, 0, 0]]}
 
     def think(self, perception):
         self.forward_kinematics(perception.joint)
@@ -52,10 +63,31 @@ class ForwardKinematicsAgent(PostureRecognitionAgent):
         :return: transformation
         :rtype: 4x4 matrix
         '''
+        global res
         T = identity(4)
         # YOUR CODE HERE
+        if joint_name in ["HeadYaw", "LElbowYaw", "RElbowYaw", "LHipYawPitch", "RHipYawPitch"]:
+            res = np.dot(T, np.array([[np.cos(joint_angle), -np.sin(joint_angle), 0, 0], [np.sin(joint_angle),
+                                                                                             np.cos(joint_angle), 0, 0],
+                                         [0, 0, 1, 0], [0, 0, 0, 1]]))
+        elif joint_name.endswith("Pitch"):
+            res = np.dot(T, np.array(
+                [[np.cos(joint_angle), 0, np.sin(joint_angle), 0], [0, 1, 0, 0], [-np.sin(joint_angle), 0,
+                                                                                  np.cos(joint_angle), 0],
+                 [0, 0, 0, 1]]))
+        elif joint_name.endswith("Roll"):
+            res = np.dot(T, np.array(
+                [[1, 0, 0, 0], [0, np.cos(joint_angle), -np.sin(joint_angle), 0], [0, np.sin(joint_angle),
+                                                                                   np.cos(joint_angle), 0],
+                 [0, 0, 0, 1]]))
 
-        return T
+        for i in self.chains.keys():
+            if joint_name in self.chains[i]:
+                res[0, 3] = self.joint_offsets[i][self.chains[i].index(joint_name)][0]
+                res[1, 3] = self.joint_offsets[i][self.chains[i].index(joint_name)][1]
+                res[2, 3] = self.joint_offsets[i][self.chains[i].index(joint_name)][2]
+        return res
+
 
     def forward_kinematics(self, joints):
         '''forward kinematics
@@ -67,6 +99,7 @@ class ForwardKinematicsAgent(PostureRecognitionAgent):
             for joint in chain_joints:
                 angle = joints[joint]
                 Tl = self.local_trans(joint, angle)
+                T = np.dot(T, Tl)
                 # YOUR CODE HERE
 
                 self.transforms[joint] = T
