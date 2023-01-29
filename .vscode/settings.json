@@ -1,0 +1,6 @@
+{
+    "python.analysis.extraPaths": [
+        "./joint_control"
+    ],
+    "python.analysis.typeCheckingMode": "basic"
+}
